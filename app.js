@@ -34,6 +34,7 @@ app.get('/dynamic', (req, res) => {
   res.json({ header: 'Calculated', body: String(result) });
 });
 
+
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
