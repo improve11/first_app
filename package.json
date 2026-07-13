@@ -10,6 +10,7 @@
     "axios": "^1.18.1",
     "express": "^5.2.1",
     "mysql2": "^3.22.5",
+    "node-cron": "^4.5.0",
     "node-telegram-bot-api": "^1.1.2"
   },
   "devDependencies": {
