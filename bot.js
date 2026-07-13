@@ -1,105 +1,64 @@
 const TelegramBot = require('node-telegram-bot-api').default;
-const mysql = require('mysql2/promise');
+const axios = require('axios');
 
 const token = '8838578840:AAHJ1EKtaTo2kE6QWb6ZgZQB6NtkIT7wc60';
-
-const pool = mysql.createPool({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'chatbottests',
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-});
 
 const bot = new TelegramBot(token, { polling: true });
 
 bot.onText(/\/start/i, (msg) => {
     const chatId = msg.chat.id;
-    bot.sendMessage(chatId, 'Привет, октагон! Напиши /help чтобы увидеть список команд.');
+    bot.sendMessage(chatId, 'Привет, октагон!\nДоступные команды:\n!qr текст - создать QR-код\n!webscr https://site.com - скриншот сайта');
 });
 
-bot.onText(/\/help/i, (msg) => {
+bot.onText(/!qr\s+(.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
-    const helpText = `
-📋 Список команд:
-/site - сайт Октагона
-/creator - создатель бота
-/randomitem - случайный предмет
-/getitembyid ID - найти предмет по ID
-/deleteitem ID - удалить предмет
-    `;
-    bot.sendMessage(chatId, helpText);
-});
-
-bot.onText(/\/site/i, (msg) => {
-    const chatId = msg.chat.id;
-    bot.sendMessage(chatId, 'https://octagon-students.ru');
-});
-
-bot.onText(/\/creator/i, (msg) => {
-    const chatId = msg.chat.id;
-    bot.sendMessage(chatId, 'Bashirov Ivan Andreevich IS 1-23-2');
-});
-
-bot.onText(/\/randomitem/i, async (msg) => {
-    const chatId = msg.chat.id;
+    const text = match[1];
     
     try {
-        const [rows] = await pool.query('SELECT * FROM Items ORDER BY RAND() LIMIT 1');
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(text)}`;
         
-        if (rows.length === 0) {
-            bot.sendMessage(chatId, ' База данных пуста!');
-            return;
-        }
+        const response = await axios.get(qrUrl, { responseType: 'arraybuffer' });
         
-        const item = rows[0];
-        const response = `(${item.id}) - ${item.name}: ${item.desc}`;
-        bot.sendMessage(chatId, response);
+        bot.sendPhoto(chatId, response.data, {
+            caption: `QR-код для: ${text}`
+        });
     } catch (error) {
-        console.error('Error:', error);
-        bot.sendMessage(chatId, ' Ошибка при получении данных');
+        console.error('QR Error:', error);
+        bot.sendMessage(chatId, ' Ошибка при генерации QR-кода');
     }
 });
 
-bot.onText(/\/getitembyid\s+(\d+)/i, async (msg, match) => {
+bot.onText(/!webscr\s+(.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
-    const id = parseInt(match[1]);
+    let url = match[1].trim();
     
-    try {
-        const [rows] = await pool.query('SELECT * FROM Items WHERE id = ?', [id]);
-        
-        if (rows.length === 0) {
-            bot.sendMessage(chatId, ' Предмет не найден!');
-            return;
-        }
-        
-        const item = rows[0];
-        const response = `(${item.id}) - ${item.name}: ${item.desc}`;
-        bot.sendMessage(chatId, response);
-    } catch (error) {
-        console.error('Error:', error);
-        bot.sendMessage(chatId, ' Ошибка при получении данных');
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
     }
-});
-
-bot.onText(/\/deleteitem\s+(\d+)/i, async (msg, match) => {
-    const chatId = msg.chat.id;
-    const id = parseInt(match[1]);
     
     try {
-        const [result] = await pool.query('DELETE FROM Items WHERE id = ?', [id]);
+        const screenshotUrl = `https://image.thum.io/get/width/1280/crop/768/${url}`;
         
-        if (result.affectedRows === 0) {
-            bot.sendMessage(chatId, ' Ошибка: предмет не найден');
-            return;
-        }
+        console.log('Загружаю скриншот:', screenshotUrl);
         
-        bot.sendMessage(chatId, ' Предмет успешно удалён!');
+        const response = await axios.get(screenshotUrl, { 
+            responseType: 'arraybuffer',
+            timeout: 60000, 
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+        });
+        
+        console.log('Скриншот загружен, размер:', response.data.length);
+        
+        await bot.sendPhoto(chatId, response.data, {
+            caption: `📸 Скриншот: ${url}`
+        });
+        
+        console.log('Скриншот отправлен!');
     } catch (error) {
-        console.error('Error:', error);
-        bot.sendMessage(chatId, ' Ошибка при удалении');
+        console.error('Screenshot Error:', error.message);
+        bot.sendMessage(chatId, ' Ошибка при создании скриншота. Попробуйте другой сайт.');
     }
 });
 
